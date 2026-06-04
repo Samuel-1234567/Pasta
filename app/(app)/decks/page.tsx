@@ -555,14 +555,16 @@ async function fetchDecks(userId: string, signal?: AbortSignal): Promise<DeckSum
     }>
   }
 
-  return (body.decks ?? []).map((deck) => ({
-    id: deck.id,
-    name: deck.name,
-    cards: deck.cards ?? 0,
-    visibility: deck.is_public ? 'Public' : 'Private',
-    createdAt: deck.created_at,
-    lastEditedAt: deck.last_edited_at,
-  }))
+  return (body.decks ?? []).map(
+    (deck): DeckSummary => ({
+      id: deck.id,
+      name: deck.name,
+      cards: deck.cards ?? 0,
+      visibility: deck.is_public ? 'Public' : 'Private',
+      createdAt: deck.created_at,
+      lastEditedAt: deck.last_edited_at,
+    }),
+  )
 }
 
 async function deleteDeck(deckId: string, userId: string): Promise<void> {

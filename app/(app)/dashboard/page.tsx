@@ -69,14 +69,15 @@ async function fetchRecentDecks(userId: string, signal?: AbortSignal): Promise<R
     }>
   }
 
-  return (body.decks ?? [])
-    .map((deck) => ({
+  return (body.decks ?? []).map(
+    (deck): RecentDeck => ({
       id: deck.id,
       name: deck.name,
       cards: deck.cards ?? 0,
       visibility: deck.is_public ? 'Public' : 'Private',
       lastEditedAt: deck.last_edited_at,
-    }))
+    }),
+  )
     .sort((a, b) => timestampMs(b.lastEditedAt) - timestampMs(a.lastEditedAt))
     .slice(0, RECENT_DECK_LIMIT)
 }
