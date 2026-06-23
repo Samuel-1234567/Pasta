@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isStudyEventsTableMissing } from '@/app/lib/study-events-table'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 type StudyEventInput = {
   type: 'card_reviewed' | 'session_seconds'
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid event type.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
   const { error } = await supabase.from('study_events').insert(rows)
 
   if (error) {

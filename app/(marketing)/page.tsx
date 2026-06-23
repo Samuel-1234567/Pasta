@@ -29,7 +29,7 @@ export default function Home() {
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link
-              href="/dashboard"
+              href="/signup"
               className="inline-flex rounded-full bg-amber-700 px-6 py-3 text-base font-medium text-white shadow-md transition hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
             >
               Start for free

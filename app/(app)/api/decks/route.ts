@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing or invalid userId.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: decks, error: decksError } = await supabase
     .from('decks')
@@ -46,6 +46,8 @@ export async function GET(req: Request) {
     name: deck.name as string,
     is_public: Boolean((deck as { is_public?: boolean }).is_public),
     profile_id: deck.profile_id as string,
+    remixed_from_deck_id:
+      (deck as { remixed_from_deck_id?: string | null }).remixed_from_deck_id ?? null,
     created_at: (deck as { created_at?: string | null }).created_at ?? null,
     last_edited_at: (deck as { last_edited_at?: string | null }).last_edited_at ?? null,
     cards: cardCountsByDeckId.get(deck.id as string) ?? 0,

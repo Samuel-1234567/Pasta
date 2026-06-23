@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/app/components/ui/button'
+import { DeckOriginPill } from '@/app/components/decks/deck-origin-pill'
 import { Dialog, DialogActions, DialogBody, DialogDescription, DialogTitle } from '@/app/components/ui/dialog'
 import { Dropdown, DropdownButton, DropdownDivider, DropdownItem, DropdownMenu } from '@/app/components/ui/dropdown'
 import { Description, Field, FieldGroup, Label } from '@/app/components/ui/fieldset'
@@ -10,7 +11,8 @@ import { Input } from '@/app/components/ui/input'
 import { Listbox, ListboxOption } from '@/app/components/ui/listbox'
 import { Select } from '@/app/components/ui/select'
 import { Switch, SwitchField } from '@/app/components/ui/switch'
-import { getCurrentUserId } from '@/app/lib/auth'
+import { useCurrentUserId } from '@/app/lib/auth'
+import { deckOrigin } from '@/app/lib/deck-origin'
 import { formatTimeFromNow } from '@/app/lib/format-time-from-now'
 
 type DeckVisibility = 'Private' | 'Unlisted' | 'Public'
@@ -23,6 +25,7 @@ type DeckSummary = {
   name: string
   cards: number
   visibility: DeckVisibility
+  origin: ReturnType<typeof deckOrigin>
   createdAt: string | null
   lastEditedAt: string | null
 }
@@ -112,10 +115,12 @@ function DeckOptionsMenu({
 
 function EditDeckModal({
   deck,
+  userId,
   onClose,
   onSaved,
 }: {
   deck: DeckSummary | null
+  userId: string
   onClose: () => void
   onSaved: (deck: DeckSummary) => void
 }) {
@@ -145,7 +150,7 @@ function EditDeckModal({
     setSaveError(null)
 
     try {
-      await updateDeckMetadata(deck.id, getCurrentUserId(), trimmedName, isPublic)
+      await updateDeckMetadata(deck.id, userId, trimmedName, isPublic)
       onSaved({
         ...deck,
         name: trimmedName,
@@ -548,6 +553,7 @@ async function fetchDecks(userId: string, signal?: AbortSignal): Promise<DeckSum
       id: string
       name: string
       is_public: boolean
+      remixed_from_deck_id?: string | null
       cards: number
       updated_at: string | null
       created_at: string | null
@@ -561,6 +567,7 @@ async function fetchDecks(userId: string, signal?: AbortSignal): Promise<DeckSum
       name: deck.name,
       cards: deck.cards ?? 0,
       visibility: deck.is_public ? 'Public' : 'Private',
+      origin: deckOrigin({ name: deck.name, remixed_from_deck_id: deck.remixed_from_deck_id }),
       createdAt: deck.created_at,
       lastEditedAt: deck.last_edited_at,
     }),
@@ -579,6 +586,7 @@ async function deleteDeck(deckId: string, userId: string): Promise<void> {
 }
 
 export default function DecksPage() {
+  const userId = useCurrentUserId()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -638,6 +646,7 @@ export default function DecksPage() {
   }, [])
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    if (!userId) return
     const loadId = ++activeLoadIdRef.current
     setIsLoading(true)
     setError(null)
@@ -650,7 +659,7 @@ export default function DecksPage() {
         return
       }
 
-      const result = await fetchDecks(getCurrentUserId(), signal)
+      const result = await fetchDecks(userId, signal)
       if (activeLoadIdRef.current === loadId) {
         setDecks(result)
         setCurrentPage(1)
@@ -665,15 +674,17 @@ export default function DecksPage() {
     } finally {
       if (activeLoadIdRef.current === loadId) setIsLoading(false)
     }
-  }, [])
+  }, [userId])
 
   useEffect(() => {
+    if (!userId) return
     const controller = new AbortController()
     void load(controller.signal)
     return () => controller.abort()
-  }, [load])
+  }, [load, userId])
 
   const onDelete = useCallback(async (id: string) => {
+    if (!userId) return
     const removedDeck = decksRef.current.find((deck) => deck.id === id)
     if (!removedDeck) return
 
@@ -681,7 +692,7 @@ export default function DecksPage() {
     setDeleteError(null)
 
     try {
-      await deleteDeck(id, getCurrentUserId())
+      await deleteDeck(id, userId)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to delete deck.'
       setDecks((prev) => {
@@ -690,12 +701,13 @@ export default function DecksPage() {
       })
       setDeleteError(message)
     }
-  }, [])
+  }, [userId])
 
   return (
     <div className="min-h-full bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
       <EditDeckModal
         deck={editingDeck}
+        userId={userId ?? ''}
         onClose={() => setEditingDeck(null)}
         onSaved={(updated) => {
           const editedAt = new Date().toISOString()
@@ -834,7 +846,8 @@ export default function DecksPage() {
                           {deck.cards} cards
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <DeckOriginPill origin={deck.origin} />
                         <VisibilityPill value={deck.visibility} />
                         <DeckOptionsMenu
                           deckId={deck.id}

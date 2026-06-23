@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from 'react'
-import { getCurrentUserId } from '@/app/lib/auth'
+import { useCurrentUserId } from '@/app/lib/auth'
 
 function moveCard<T>(list: T[], from: number, to: number): T[] {
   if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list
@@ -79,7 +79,7 @@ function GripIcon(props: SVGProps<SVGSVGElement>) {
 export default function EditDeckPage() {
   const params = useParams()
   const deckId = typeof params?.id === 'string' ? params.id : ''
-  const userId = getCurrentUserId()
+  const userId = useCurrentUserId()
 
   const [deckName, setDeckName] = useState('')
   const [cards, setCards] = useState<Array<{ front: string; back: string }>>([])
@@ -115,9 +115,11 @@ export default function EditDeckPage() {
     !loading
 
   const loadDeck = useCallback(async () => {
-    if (!deckId) {
-      setLoading(false)
-      setLoadError('Missing deck.')
+    if (!deckId || !userId) {
+      if (!deckId) {
+        setLoading(false)
+        setLoadError('Missing deck.')
+      }
       return
     }
     setLoading(true)

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CheckoutButton } from "@/app/components/billing/checkout-button";
 
 function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -67,11 +68,11 @@ export default function Pricing() {
               },
               {
                 name: "Pro",
-                price: "$8",
+                price: "$4.99",
                 cadence: "per month",
                 blurb: "For serious learners who want more space and polish.",
                 ctaLabel: "Go Pro",
-                ctaHref: "/dashboard",
+                checkout: true,
                 featured: true,
                 highlights: [
                   "Everything in Free",
@@ -82,11 +83,11 @@ export default function Pricing() {
               },
               {
                 name: "Team",
-                price: "$20",
-                cadence: "per month",
+                price: "Soon",
+                cadence: "",
                 blurb: "For small cohorts studying together with consistent decks.",
-                ctaLabel: "Open app",
-                ctaHref: "/dashboard",
+                ctaLabel: "Coming soon",
+                comingSoon: true,
                 featured: false,
                 highlights: [
                   "Shared team workspace",
@@ -122,22 +123,46 @@ export default function Pricing() {
                   <span className="text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-50">
                     {plan.price}
                   </span>
-                  <span className="pb-1 text-sm text-stone-500 dark:text-stone-400">
-                    {plan.cadence}
-                  </span>
+                  {plan.cadence ? (
+                    <span className="pb-1 text-sm text-stone-500 dark:text-stone-400">
+                      {plan.cadence}
+                    </span>
+                  ) : null}
                 </div>
 
-                <Link
-                  href={plan.ctaHref}
-                  className={[
-                    "mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium shadow-sm transition",
-                    plan.featured
-                      ? "bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
-                      : "border border-stone-300 bg-white/60 text-stone-800 backdrop-blur hover:border-stone-400 hover:bg-white dark:border-stone-600 dark:bg-stone-900/60 dark:text-stone-100 dark:hover:border-stone-500",
-                  ].join(" ")}
-                >
-                  {plan.ctaLabel}
-                </Link>
+                {'checkout' in plan && plan.checkout ? (
+                  <CheckoutButton
+                    loginNext="/pricing"
+                    className={[
+                      "mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium shadow-sm transition",
+                      plan.featured
+                        ? "bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
+                        : "border border-stone-300 bg-white/60 text-stone-800 backdrop-blur hover:border-stone-400 hover:bg-white dark:border-stone-600 dark:bg-stone-900/60 dark:text-stone-100 dark:hover:border-stone-500",
+                    ].join(" ")}
+                  >
+                    {plan.ctaLabel}
+                  </CheckoutButton>
+                ) : 'comingSoon' in plan && plan.comingSoon ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-6 inline-flex w-full cursor-not-allowed items-center justify-center rounded-full border border-stone-200 bg-stone-100 px-4 py-2.5 text-sm font-medium text-stone-500 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-400"
+                  >
+                    {plan.ctaLabel}
+                  </button>
+                ) : (
+                  <Link
+                    href={'ctaHref' in plan && plan.ctaHref ? plan.ctaHref : '/dashboard'}
+                    className={[
+                      "mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium shadow-sm transition",
+                      plan.featured
+                        ? "bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
+                        : "border border-stone-300 bg-white/60 text-stone-800 backdrop-blur hover:border-stone-400 hover:bg-white dark:border-stone-600 dark:bg-stone-900/60 dark:text-stone-100 dark:hover:border-stone-500",
+                    ].join(" ")}
+                  >
+                    {plan.ctaLabel}
+                  </Link>
+                )}
 
                 <ul className="mt-6 space-y-3 text-sm text-stone-700 dark:text-stone-300">
                   {plan.highlights.map((item) => (
@@ -222,12 +247,12 @@ export default function Pricing() {
                 a: "No—study mode is core to Pasta. Paid plans are about scale, control, and convenience.",
               },
               {
-                q: "Can I cancel Pro or Team?",
+                q: "Can I cancel Pro?",
                 a: "Yes. Cancel anytime. You will keep access through the end of your billing period.",
               },
               {
-                q: "Is Team right for a classroom?",
-                a: "Team is built for small cohorts today. If you need a larger rollout, start Team and we can expand the offering as demand grows.",
+                q: "When is Team available?",
+                a: "Team is coming soon. Join Pro today for individual upgrades, and we will announce Team when shared workspaces are ready.",
               },
             ].map((item) => (
               <div

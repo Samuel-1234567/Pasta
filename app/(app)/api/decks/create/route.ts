@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 type CreateDeckPayload = {
   userId: string
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'All cards are empty.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: insertedDeck, error: deckError } = await supabase
     .from('decks')

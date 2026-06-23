@@ -45,7 +45,15 @@ export function Avatar({
           </text>
         </svg>
       )}
-      {src && <img className="size-full" src={src} alt={alt} />}
+      {src ? (
+        <img
+          key={src}
+          className="size-full object-cover"
+          src={src}
+          alt={alt}
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
     </span>
   )
 }
@@ -74,13 +82,13 @@ export const AvatarButton = forwardRef(function AvatarButton(
   return typeof props.href === 'string' ? (
     <Link {...props} className={classes} ref={ref as React.ForwardedRef<HTMLAnchorElement>}>
       <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
+        <Avatar src={src} square={square} initials={initials} alt={alt} className="size-full" />
       </TouchTarget>
     </Link>
   ) : (
     <Headless.Button {...props} className={classes} ref={ref}>
       <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
+        <Avatar src={src} square={square} initials={initials} alt={alt} className="size-full" />
       </TouchTarget>
     </Headless.Button>
   )

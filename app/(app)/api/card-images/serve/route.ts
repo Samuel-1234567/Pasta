@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 const BUCKET = 'card-images'
 
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid path.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.storage.from(BUCKET).download(path)
   if (error || !data) {
     return NextResponse.json({ error: 'Not found.' }, { status: 404 })

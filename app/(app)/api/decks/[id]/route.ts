@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -20,11 +20,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     return NextResponse.json({ error: 'Missing or invalid userId.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: deck, error: deckError } = await supabase
     .from('decks')
-    .select('id, name, profile_id, is_public')
+    .select('id, name, profile_id, is_public, remixed_from_deck_id')
     .eq('id', deckId)
     .maybeSingle()
 
@@ -63,6 +63,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     deck: {
       id: deckId,
       name: String((deck as { name?: string }).name ?? 'Untitled'),
+      is_public: isPublic,
+      remixed_from_deck_id:
+        (deck as { remixed_from_deck_id?: string | null }).remixed_from_deck_id ?? null,
     },
     cards: cleaned,
     canEdit: owns,
@@ -94,7 +97,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return NextResponse.json({ error: 'Deck name is required.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: deck, error: deckError } = await supabase
     .from('decks')
@@ -184,7 +187,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     return NextResponse.json({ error: 'Missing or invalid userId.' }, { status: 400 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: deck, error: deckError } = await supabase
     .from('decks')

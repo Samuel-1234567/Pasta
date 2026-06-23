@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 import { EMPTY_STUDY_STATS, isStudyEventsTableMissing } from '@/app/lib/study-events-table'
 import {
   aggregateStudyEvents,
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const lookbackStart = new Date(todayStart)
   lookbackStart.setUTCDate(lookbackStart.getUTCDate() - 366)
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
 
   const { data: rows, error } = await supabase
     .from('study_events')

@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { DeckComments } from '@/app/components/decks/deck-comments'
 import { FlipCard } from '@/app/components/study/FlipCard'
+import { StudyComplete, type StudySessionStats } from '@/app/components/study/StudyComplete'
 import { CardFaceContent } from '@/app/lib/card-face'
-import { getCurrentUserId } from '@/app/lib/auth'
+import { useCurrentUserId } from '@/app/lib/auth'
 import { recordStudyActivity } from '@/app/lib/record-study-activity'
 
 const SESSION_TICK_SECONDS = 30
@@ -17,41 +19,81 @@ type StudyCard = {
   position: number
 }
 
+type CardTimer = {
+  index: number
+  startedAt: number
+}
+
+function computeSessionStats(
+  sessionStartedAt: number | null,
+  cardTimesMs: number[],
+  cardCount: number,
+): StudySessionStats {
+  const now = Date.now()
+  const totalSeconds = sessionStartedAt != null ? Math.round((now - sessionStartedAt) / 1000) : 0
+  const totalCardMs = cardTimesMs.slice(0, cardCount).reduce((sum, ms) => sum + ms, 0)
+  const avgSecondsPerCard = cardCount > 0 ? Math.round(totalCardMs / cardCount / 1000) : 0
+
+  return {
+    totalSeconds,
+    avgSecondsPerCard,
+    cardCount,
+  }
+}
+
 export default function StudyDeckPage() {
   const params = useParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const deckId = typeof params?.id === 'string' ? params.id : ''
-  const userId = getCurrentUserId()
+  const userId = useCurrentUserId()
+  const fromExplore = searchParams.get('from') === 'explore'
 
   const [deckName, setDeckName] = useState('')
+  const [canEdit, setCanEdit] = useState<boolean | null>(null)
+  const [isPublic, setIsPublic] = useState(false)
   const [cards, setCards] = useState<StudyCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [index, setIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
+  const [completed, setCompleted] = useState<StudySessionStats | null>(null)
   const reviewedCardIdsRef = useRef(new Set<string>())
+  const sessionStartedAtRef = useRef<number | null>(null)
+  const cardTimerRef = useRef<CardTimer>({ index: 0, startedAt: Date.now() })
+  const cardTimesMsRef = useRef<number[]>([])
 
   useEffect(() => {
-    if (!deckId) {
-      setLoading(false)
-      setError('Missing deck.')
+    if (!deckId || !userId) {
+      if (!deckId) {
+        setLoading(false)
+        setError('Missing deck.')
+      }
       return
     }
     let cancelled = false
     setLoading(true)
     setError(null)
+    setCompleted(null)
     void (async () => {
       try {
         const res = await fetch(`/api/decks/${encodeURIComponent(deckId)}?userId=${encodeURIComponent(userId)}`)
         const body = (await res.json().catch(() => null)) as
-          | { error?: string; deck?: { name: string }; cards?: StudyCard[] }
+          | { error?: string; deck?: { name: string; is_public?: boolean }; cards?: StudyCard[]; canEdit?: boolean }
           | null
         if (!res.ok) throw new Error(body?.error ?? `Failed to load deck (${res.status}).`)
         if (cancelled) return
         setDeckName(body?.deck?.name ?? '')
+        setCanEdit(Boolean(body?.canEdit))
+        setIsPublic(Boolean(body?.deck?.is_public))
         setCards(Array.isArray(body?.cards) ? body!.cards! : [])
         setIndex(0)
         setShowAnswer(false)
+        const startedAt = Date.now()
+        sessionStartedAtRef.current = startedAt
+        cardTimerRef.current = { index: 0, startedAt }
+        cardTimesMsRef.current = []
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Something went wrong.')
       } finally {
@@ -63,10 +105,56 @@ export default function StudyDeckPage() {
     }
   }, [deckId, userId])
 
+  const isExploreContext = canEdit === false || (fromExplore && canEdit !== true)
+  const showComments = isPublic && canEdit === false
+  const backHref = isExploreContext ? '/explore' : '/decks'
+  const backLabel = isExploreContext ? 'Explore' : 'Decks'
+
+  useEffect(() => {
+    if (!deckId || canEdit === null) return
+
+    const params = new URLSearchParams(searchParams.toString())
+
+    if (canEdit === false && !fromExplore) {
+      params.set('from', 'explore')
+      router.replace(`/decks/${encodeURIComponent(deckId)}/study?${params.toString()}`)
+      return
+    }
+
+    if (canEdit === true && fromExplore) {
+      params.delete('from')
+      const query = params.toString()
+      router.replace(
+        query
+          ? `/decks/${encodeURIComponent(deckId)}/study?${query}`
+          : `/decks/${encodeURIComponent(deckId)}/study`,
+      )
+    }
+  }, [canEdit, deckId, fromExplore, router, searchParams])
+
   const total = cards.length
   const current = cards[index]
   const atStart = index <= 0
   const atEnd = index >= total - 1
+
+  const recordCardTime = useCallback((timer: CardTimer) => {
+    const elapsedMs = Date.now() - timer.startedAt
+    if (elapsedMs <= 0) return
+    const next = cardTimesMsRef.current.slice()
+    next[timer.index] = (next[timer.index] ?? 0) + elapsedMs
+    cardTimesMsRef.current = next
+  }, [])
+
+  useEffect(() => {
+    if (loading || error || total === 0 || completed) return
+
+    const timer = cardTimerRef.current
+    cardTimerRef.current = { index, startedAt: Date.now() }
+
+    return () => {
+      recordCardTime(timer)
+    }
+  }, [completed, error, index, loading, recordCardTime, total])
 
   const goPrev = useCallback(() => {
     setShowAnswer(false)
@@ -77,6 +165,25 @@ export default function StudyDeckPage() {
     setShowAnswer(false)
     setIndex((i) => Math.min(total - 1, i + 1))
   }, [total])
+
+  const finishSession = useCallback(() => {
+    recordCardTime(cardTimerRef.current)
+    cardTimerRef.current = { index, startedAt: Date.now() }
+    setCompleted(
+      computeSessionStats(sessionStartedAtRef.current, cardTimesMsRef.current, total),
+    )
+  }, [index, recordCardTime, total])
+
+  const studyAgain = useCallback(() => {
+    setCompleted(null)
+    setIndex(0)
+    setShowAnswer(false)
+    reviewedCardIdsRef.current = new Set()
+    const startedAt = Date.now()
+    sessionStartedAtRef.current = startedAt
+    cardTimerRef.current = { index: 0, startedAt }
+    cardTimesMsRef.current = []
+  }, [])
 
   const toggleFlip = useCallback(() => {
     setShowAnswer((wasShowingQuestion) => {
@@ -94,7 +201,7 @@ export default function StudyDeckPage() {
   }, [deckId])
 
   useEffect(() => {
-    if (loading || error || total === 0 || !deckId) return
+    if (loading || error || total === 0 || !deckId || !userId || completed) return
 
     const recordSeconds = (seconds: number) => {
       if (seconds <= 0) return
@@ -109,10 +216,11 @@ export default function StudyDeckPage() {
       window.clearInterval(intervalId)
       recordSeconds(SESSION_TICK_SECONDS)
     }
-  }, [deckId, error, loading, total, userId])
+  }, [completed, deckId, error, loading, total, userId])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (completed) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
@@ -124,22 +232,23 @@ export default function StudyDeckPage() {
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault()
-        goNext()
+        if (atEnd) finishSession()
+        else goNext()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [toggleFlip, goPrev, goNext])
+  }, [atEnd, completed, finishSession, goNext, goPrev, toggleFlip])
 
   return (
     <div className="min-h-full bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
       <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-stone-50/90 backdrop-blur-md dark:border-stone-800/80 dark:bg-stone-950/90">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
-            href="/decks"
+            href={backHref}
             className="shrink-0 text-sm font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
           >
-            ← Decks
+            ← {backLabel}
           </Link>
           {deckId ? (
             <Link
@@ -163,10 +272,10 @@ export default function StudyDeckPage() {
             {error}
             <div className="mt-4">
               <Link
-                href="/decks"
+                href={backHref}
                 className="font-semibold text-red-900 underline dark:text-red-100"
               >
-                Back to decks
+                {isExploreContext ? 'Back to explore' : 'Back to decks'}
               </Link>
             </div>
           </div>
@@ -180,6 +289,14 @@ export default function StudyDeckPage() {
               Create a deck
             </Link>
           </div>
+        ) : completed ? (
+          <StudyComplete
+            deckId={deckId}
+            deckName={deckName}
+            stats={completed}
+            onStudyAgain={studyAgain}
+            fromExplore={isExploreContext}
+          />
         ) : (
           <>
             <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-500">
@@ -222,19 +339,30 @@ export default function StudyDeckPage() {
               >
                 Previous
               </button>
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={atEnd}
-                className="inline-flex rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800"
-              >
-                Next
-              </button>
+              {atEnd ? (
+                <button
+                  type="button"
+                  onClick={finishSession}
+                  className="inline-flex rounded-full bg-amber-700 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
+                >
+                  Finish
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="inline-flex rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800"
+                >
+                  Next
+                </button>
+              )}
             </div>
 
             <p className="mt-6 text-center text-[11px] text-stone-400 dark:text-stone-600">
-              Keyboard: ← → navigate · Space or Enter flips
+              Keyboard: ← → navigate · Space or Enter flips{atEnd ? ' · → finishes' : ''}
             </p>
+
+            {showComments ? <DeckComments deckId={deckId} /> : null}
           </>
         )}
       </main>

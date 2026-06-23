@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState, type SVGProps } from 'react'
 import { allocateCardSlots, normalizeMixPct } from '@/app/lib/flashcard-mix'
-import { getCurrentUserId } from '@/app/lib/auth'
+import { useCurrentUserId } from '@/app/lib/auth'
 import { loadDeckPromptHistory, pushDeckPromptHistory } from '@/app/lib/deck-prompt-history'
 
 /** Digits-only, strip redundant leading zeros (e.g. "07"→"7", "0" stays "0"). */
@@ -110,7 +110,7 @@ function GripIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 export default function NewDeckPage() {
-  const userId = getCurrentUserId()
+  const userId = useCurrentUserId()
 
   const [prompt, setPrompt] = useState('')
   const [cardCount, setCardCount] = useState(12)
@@ -141,6 +141,7 @@ export default function NewDeckPage() {
   const [cardImageUploadError, setCardImageUploadError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!userId) return
     setRecentPrompts(loadDeckPromptHistory(userId))
   }, [userId])
 
@@ -286,7 +287,7 @@ export default function NewDeckPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: getCurrentUserId(),
+          userId,
           name: deckName,
           isPublic: false,
           cards,

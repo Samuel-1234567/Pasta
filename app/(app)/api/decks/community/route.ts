@@ -1,29 +1,21 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { authorLabelFromProfile, loadProfilesById } from '@/app/lib/community-author'
+import { isRemixDeck } from '@/app/lib/deck-origin'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
+import { requireUser } from '@/app/lib/supabase/require-user'
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-}
-
-function authorLabelFromEmail(email: string | null | undefined) {
-  if (!email) return 'Community member'
-  const local = email.split('@')[0]?.trim()
-  return local || 'Community member'
-}
-
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const userId = searchParams.get('userId')
-
-  if (!userId || !isUuid(userId)) {
-    return NextResponse.json({ error: 'Missing or invalid userId.' }, { status: 400 })
+export async function GET() {
+  const auth = await requireUser()
+  if (!auth.user) {
+    return NextResponse.json({ error: auth.error }, { status: 401 })
   }
 
-  const supabase = createSupabaseServerClient()
+  const supabase = createSupabaseAdminClient()
+  const userId = auth.user.id
 
   const { data: decks, error: decksError } = await supabase
     .from('decks')
-    .select('id, name, profile_id, is_public')
+    .select('id, name, profile_id, is_public, remixed_from_deck_id')
     .eq('is_public', true)
     .neq('profile_id', userId)
     .order('name', { ascending: true })
@@ -34,22 +26,12 @@ export async function GET(req: Request) {
 
   const profileIds = [...new Set((decks ?? []).map((d) => d.profile_id as string).filter(Boolean))]
 
-  const emailByProfileId = new Map<string, string>()
-  if (profileIds.length > 0) {
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, email')
-      .in('id', profileIds)
-
-    if (profilesError) {
-      return NextResponse.json({ error: profilesError.message }, { status: 500 })
-    }
-
-    for (const profile of profiles ?? []) {
-      const id = profile.id as string
-      const email = (profile as { email?: string | null }).email
-      if (id && email) emailByProfileId.set(id, email)
-    }
+  let profileById: Map<string, { username?: string | null; email?: string | null }>
+  try {
+    profileById = await loadProfilesById(supabase, profileIds)
+  } catch (profileError) {
+    const message = profileError instanceof Error ? profileError.message : 'Failed to load profiles.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 
   const deckIds = (decks ?? []).map((d) => d.id).filter(Boolean)
@@ -70,12 +52,17 @@ export async function GET(req: Request) {
 
   const response = (decks ?? []).map((deck) => {
     const profileId = deck.profile_id as string
+    const name = deck.name as string
+    const remixedFromDeckId =
+      (deck as { remixed_from_deck_id?: string | null }).remixed_from_deck_id ?? null
     return {
       id: deck.id as string,
-      name: deck.name as string,
+      name,
       profile_id: profileId,
-      author_label: authorLabelFromEmail(emailByProfileId.get(profileId)),
+      author_label: authorLabelFromProfile(profileById.get(profileId) ?? {}),
       cards: cardCountsByDeckId.get(deck.id as string) ?? 0,
+      is_own: profileId === userId,
+      is_remix: isRemixDeck({ name, remixed_from_deck_id: remixedFromDeckId }),
     }
   })
 

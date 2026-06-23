@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 const BUCKET = 'card-images'
 const MAX_BYTES = 3 * 1024 * 1024
@@ -28,7 +28,7 @@ function looksLikeMissingBucket(msg: string) {
   return /bucket|not found|does not exist|no such bucket/i.test(msg)
 }
 
-type ServiceClient = ReturnType<typeof createSupabaseServerClient>
+type ServiceClient = ReturnType<typeof createSupabaseAdminClient>
 
 /**
  * Creates `card-images` if missing (service role). Matches migration defaults so uploads work
@@ -128,9 +128,9 @@ export async function POST(req: Request) {
 
     const path = `${userId}/${crypto.randomUUID()}.${fmt.ext}`
 
-    let supabase: ReturnType<typeof createSupabaseServerClient>
+    let supabase: ReturnType<typeof createSupabaseAdminClient>
     try {
-      supabase = createSupabaseServerClient()
+      supabase = createSupabaseAdminClient()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Supabase is not configured.'
       return NextResponse.json(

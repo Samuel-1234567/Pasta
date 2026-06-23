@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getCurrentUserId } from '@/app/lib/auth'
+import { useCurrentUserId } from '@/app/lib/auth'
+import { DeckOriginPill } from '@/app/components/decks/deck-origin-pill'
+import { deckOrigin } from '@/app/lib/deck-origin'
 import { formatTimeFromNow } from '@/app/lib/format-time-from-now'
 import {
   formatCardsReviewed,
@@ -21,6 +23,7 @@ type RecentDeck = {
   name: string
   cards: number
   visibility: DeckVisibility
+  origin: ReturnType<typeof deckOrigin>
   lastEditedAt: string | null
 }
 
@@ -64,6 +67,7 @@ async function fetchRecentDecks(userId: string, signal?: AbortSignal): Promise<R
       id: string
       name: string
       is_public: boolean
+      remixed_from_deck_id?: string | null
       cards: number
       last_edited_at: string | null
     }>
@@ -75,6 +79,7 @@ async function fetchRecentDecks(userId: string, signal?: AbortSignal): Promise<R
       name: deck.name,
       cards: deck.cards ?? 0,
       visibility: deck.is_public ? 'Public' : 'Private',
+      origin: deckOrigin({ name: deck.name, remixed_from_deck_id: deck.remixed_from_deck_id }),
       lastEditedAt: deck.last_edited_at,
     }),
   )
@@ -105,6 +110,7 @@ function RecentDeckSkeleton() {
 }
 
 export default function DashboardPage() {
+  const userId = useCurrentUserId()
   const [recentDecks, setRecentDecks] = useState<RecentDeck[]>([])
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -112,10 +118,10 @@ export default function DashboardPage() {
   const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    if (!userId) return
     setIsLoading(true)
     setError(null)
     try {
-      const userId = getCurrentUserId()
       const [decks, stats] = await Promise.all([
         fetchRecentDecks(userId, signal),
         fetchStudyStats(userId, signal),
@@ -130,13 +136,14 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [userId])
 
   useEffect(() => {
+    if (!userId) return
     const controller = new AbortController()
     void load(controller.signal)
     return () => controller.abort()
-  }, [load])
+  }, [load, userId])
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000)
@@ -195,7 +202,8 @@ export default function DashboardPage() {
             {deck.cards} {deck.cards === 1 ? 'card' : 'cards'} • edited {formatTimeFromNow(deck.lastEditedAt, now)}
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <DeckOriginPill origin={deck.origin} />
           <VisibilityPill value={deck.visibility} />
         </div>
       </Link>
@@ -293,15 +301,15 @@ export default function DashboardPage() {
 
         <section className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/40">
-            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-50">Explore community decks</h2>
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-50">Explore decks</h2>
             <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
               Browse public decks made by other users and jump into study mode.
             </p>
             <Link
-              href="/decks/community"
+              href="/explore"
               className="mt-5 inline-flex rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
             >
-              View community decks
+              Open explore
             </Link>
           </div>
 

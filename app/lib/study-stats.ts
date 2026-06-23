@@ -56,6 +56,21 @@ export function formatStudyMinutes(minutes: number): string {
   return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`
 }
 
+export function formatStudyDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds))
+  if (seconds <= 0) return '0 sec'
+  if (seconds < 60) return `${seconds} sec`
+  const minutes = Math.floor(seconds / 60)
+  const remSeconds = seconds % 60
+  if (minutes < 60) {
+    return remSeconds === 0 ? `${minutes} min` : `${minutes} min ${remSeconds} sec`
+  }
+  const hours = Math.floor(minutes / 60)
+  const remMinutes = minutes % 60
+  if (remMinutes === 0) return `${hours} hr`
+  return `${hours} hr ${remMinutes} min`
+}
+
 export function formatCardsReviewed(count: number): string {
   if (count === 1) return '1 card'
   return `${count} cards`

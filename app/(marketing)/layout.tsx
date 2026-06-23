@@ -36,10 +36,16 @@ export default function MarketingLayout({
               Pricing
             </Link>
             <Link
-              href="/dashboard"
+              href="/login"
+              className="transition hover:text-amber-800 dark:hover:text-amber-300"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/signup"
               className="rounded-full bg-amber-700 px-4 py-2 text-white shadow-sm transition hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500"
             >
-              Open app
+              Sign up
             </Link>
           </nav>
         </div>

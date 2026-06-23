@@ -1,10 +1,10 @@
-import { CURRENT_USER_ID } from './current-user'
+'use client'
+
+export { AuthProvider, useAuth, useCurrentUserId } from '@/app/components/auth-provider'
 
 /**
- * Temporary auth stub.
- * Treats a fixed UUID as the currently logged-in user until real auth is built.
+ * @deprecated Use `useCurrentUserId()` in client components instead.
  */
-export function getCurrentUserId(): string {
-  return CURRENT_USER_ID
+export function getCurrentUserId(): never {
+  throw new Error('getCurrentUserId() is deprecated. Use useCurrentUserId() from @/app/lib/auth.')
 }
-
