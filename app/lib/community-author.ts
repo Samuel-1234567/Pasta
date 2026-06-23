@@ -25,7 +25,8 @@ export async function loadProfilesById(
     .select('id, email, username')
     .in('id', profileIds)
 
-  let profiles = profilesWithUsername
+  let profiles: Array<{ id: string; email?: string | null; username?: string | null }> | null =
+    profilesWithUsername
   let profilesError = usernameError
 
   if (profilesError && isMissingProfileColumnError(profilesError.message)) {

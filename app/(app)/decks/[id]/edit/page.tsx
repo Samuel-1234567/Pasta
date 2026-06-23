@@ -163,7 +163,7 @@ export default function EditDeckPage() {
     const file = e.target.files?.[0]
     const target = cardImageTargetRef.current
     e.target.value = ''
-    if (!file || !target) return
+    if (!file || !target || !userId) return
 
     setCardImageUploadError(null)
     setCardImageUploadBusy({ idx: target.idx, side: target.side })

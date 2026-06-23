@@ -188,7 +188,7 @@ export default function StudyDeckPage() {
   const toggleFlip = useCallback(() => {
     setShowAnswer((wasShowingQuestion) => {
       const cardId = cards[index]?.id
-      if (!wasShowingQuestion && cardId && !reviewedCardIdsRef.current.has(cardId)) {
+      if (!wasShowingQuestion && cardId && userId && !reviewedCardIdsRef.current.has(cardId)) {
         reviewedCardIdsRef.current.add(cardId)
         recordStudyActivity(userId, deckId, [{ type: 'card_reviewed', quantity: 1 }])
       }

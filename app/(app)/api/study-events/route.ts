@@ -33,23 +33,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No events provided.' }, { status: 400 })
   }
 
-  const rows = events.slice(0, 50).map((event) => {
+  const rows: Array<{
+    profile_id: string
+    deck_id: string | null
+    event_type: 'card_reviewed' | 'session_seconds'
+    quantity: number
+  }> = []
+
+  for (const event of events.slice(0, 50)) {
     const type = event?.type
     if (type !== 'card_reviewed' && type !== 'session_seconds') {
-      return null
+      return NextResponse.json({ error: 'Invalid event type.' }, { status: 400 })
     }
     const rawQty = event.quantity ?? 1
     const quantity = Math.min(86400, Math.max(1, Math.floor(Number(rawQty)) || 1))
-    return {
+    rows.push({
       profile_id: userId,
       deck_id: deckId,
       event_type: type,
       quantity,
-    }
-  })
-
-  if (rows.some((r) => r === null)) {
-    return NextResponse.json({ error: 'Invalid event type.' }, { status: 400 })
+    })
   }
 
   const supabase = createSupabaseAdminClient()

@@ -170,7 +170,7 @@ export default function NewDeckPage() {
 
   async function generatePreview(overridePrompt?: string) {
     const effectivePrompt = (overridePrompt ?? prompt).trim()
-    if (!effectivePrompt || !mixWeightsOk) return
+    if (!effectivePrompt || !mixWeightsOk || !userId) return
 
     setPrompt(effectivePrompt)
     setIsGenerating(true)
@@ -234,7 +234,7 @@ export default function NewDeckPage() {
     const file = e.target.files?.[0]
     const target = cardImageTargetRef.current
     e.target.value = ''
-    if (!file || !target) return
+    if (!file || !target || !userId) return
 
     setCardImageUploadError(null)
     setCardImageUploadBusy({ idx: target.idx, side: target.side })
