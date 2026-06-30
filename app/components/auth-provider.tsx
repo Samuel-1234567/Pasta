@@ -41,6 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           username: null,
           avatarUrl: null,
           lastAuthProvider: null,
+          referralCode: null,
+          referredByEmail: null,
           ...patch,
         }
       })

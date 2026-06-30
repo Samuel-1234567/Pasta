@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Provider } from '@supabase/supabase-js'
 import { AzureLoginButton } from '@/app/components/azure-login-button'
 import { DiscordLoginButton } from '@/app/components/discord-login-button'
 import { GitHubLoginButton } from '@/app/components/github-login-button'
 import { GoogleLoginButton } from '@/app/components/google-login-button'
+import { REFERRAL_CODE_LENGTH, REFERRAL_COOKIE, REFERRAL_QUERY_PARAM, normalizeReferralCode } from '@/app/lib/referral'
 import { createSupabaseBrowserClient } from '@/app/lib/supabase/client'
 
 function authCallbackUrl(next = '/dashboard', provider?: 'azure' | 'discord' | 'github' | 'google') {
@@ -18,6 +19,13 @@ function authCallbackUrl(next = '/dashboard', provider?: 'azure' | 'discord' | '
   return url.toString()
 }
 
+function authConfirmUrl(next = '/dashboard') {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
+  const url = new URL('/auth/confirm', appUrl)
+  url.searchParams.set('next', next)
+  return url.toString()
+}
+
 function decodeQueryError(value: string | null): string | null {
   if (!value) return null
   try {
@@ -25,6 +33,12 @@ function decodeQueryError(value: string | null): string | null {
   } catch {
     return value
   }
+}
+
+function persistReferralCookie(code: string) {
+  const trimmed = code.trim()
+  if (!trimmed) return
+  document.cookie = `${REFERRAL_COOKIE}=${encodeURIComponent(trimmed)}; path=/; max-age=604800; samesite=lax`
 }
 
 const OAUTH_PROVIDER_LABEL: Record<'azure' | 'discord' | 'github' | 'google', string> = {
@@ -43,10 +57,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   const searchParams = useSearchParams()
   const nextPath = searchParams.get('next') ?? '/dashboard'
   const queryError = decodeQueryError(searchParams.get('error'))
+  const queryReferralCode = searchParams.get(REFERRAL_QUERY_PARAM)?.trim() ?? ''
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [referralCode, setReferralCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [oauthProvider, setOauthProvider] = useState<'azure' | 'discord' | 'github' | 'google' | null>(
     null,
@@ -57,6 +73,25 @@ export function AuthForm({ mode }: AuthFormProps) {
   const isSignup = mode === 'signup'
   const busy = submitting || oauthProvider !== null
 
+  useEffect(() => {
+    if (!isSignup || !queryReferralCode) return
+    const normalized = normalizeReferralCode(queryReferralCode)
+    setReferralCode(normalized)
+    persistReferralCookie(normalized)
+  }, [isSignup, queryReferralCode])
+
+  async function applyReferralAfterSignup(code: string) {
+    const trimmed = normalizeReferralCode(code)
+    if (!trimmed) return
+
+    await fetch('/api/referrals/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ code: trimmed }),
+    }).catch(() => null)
+  }
+
   async function signInWithOAuth(provider: Extract<Provider, 'azure' | 'discord' | 'github' | 'google'>) {
     setError(null)
     setMessage(null)
@@ -64,6 +99,10 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       const supabase = createSupabaseBrowserClient()
+
+      if (isSignup && referralCode.trim()) {
+        persistReferralCookie(referralCode)
+      }
 
       // Clear any stale local session so OAuth always runs through the provider.
       await supabase.auth.signOut({ scope: 'local' })
@@ -126,13 +165,19 @@ export function AuthForm({ mode }: AuthFormProps) {
     setSubmitting(true)
     try {
       const supabase = createSupabaseBrowserClient()
+      const trimmedReferralCode = normalizeReferralCode(referralCode)
 
       if (isSignup) {
+        if (trimmedReferralCode) {
+          persistReferralCookie(trimmedReferralCode)
+        }
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: trimmedEmail,
           password,
           options: {
-            emailRedirectTo: authCallbackUrl(nextPath),
+            emailRedirectTo: authConfirmUrl(nextPath),
+            data: trimmedReferralCode ? { referral_code: trimmedReferralCode } : undefined,
           },
         })
 
@@ -142,6 +187,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         }
 
         if (data.session) {
+          if (trimmedReferralCode) {
+            await applyReferralAfterSignup(trimmedReferralCode)
+          }
           router.replace(nextPath.startsWith('/') ? nextPath : '/dashboard')
           router.refresh()
           return
@@ -229,6 +277,33 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+          {isSignup ? (
+            <div>
+              <label
+                htmlFor="referralCode"
+                className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+              >
+                Referral code <span className="font-normal text-stone-500">(optional)</span>
+              </label>
+              <input
+                id="referralCode"
+                name="referralCode"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={REFERRAL_CODE_LENGTH}
+                value={referralCode}
+                onChange={(e) =>
+                  setReferralCode(
+                    normalizeReferralCode(e.target.value).slice(0, REFERRAL_CODE_LENGTH),
+                  )
+                }
+                placeholder="6-character code"
+                className="mt-1.5 w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 font-mono text-sm uppercase tracking-widest text-stone-900 shadow-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200 dark:border-stone-600 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-amber-500 dark:focus:ring-amber-900/40"
+              />
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-stone-700 dark:text-stone-300">
               Email

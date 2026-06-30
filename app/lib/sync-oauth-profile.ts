@@ -31,16 +31,18 @@ export async function syncOAuthProfileToDatabase(
   const supabase = createSupabaseAdminClient()
   const { data: existing, error: loadError } = await supabase
     .from('profiles')
-    .select('email, username, avatar_url, last_auth_provider')
+    .select('email, username, avatar_url, last_auth_provider, referred_by_email')
     .eq('id', authUser.id)
     .maybeSingle()
 
   if (
     loadError &&
-    !/username|avatar_url|last_auth_provider|column .* does not exist/i.test(loadError.message)
+    !/username|avatar_url|last_auth_provider|referred_by_email|column .* does not exist/i.test(loadError.message)
   ) {
     return
   }
+
+  const referredByEmail = existing?.referred_by_email?.trim().toLowerCase() ?? null
 
   const activeProvider =
     options.activeProvider ??
@@ -58,10 +60,12 @@ export async function syncOAuthProfileToDatabase(
     last_auth_provider?: string | null
   } = { id: authUser.id, last_auth_provider: activeProvider }
 
-  if (authUser.email) {
-    row.email = authUser.email
-  } else if (existing?.email) {
-    row.email = existing.email
+  if (!referredByEmail) {
+    if (authUser.email) {
+      row.email = authUser.email
+    } else if (existing?.email) {
+      row.email = existing.email
+    }
   }
 
   if (oauth.username && shouldApplyOAuthUsername(existing?.username ?? null, authUser)) {

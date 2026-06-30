@@ -4,21 +4,45 @@ import { useRef, useState } from 'react'
 import { Avatar } from '@/app/components/ui/avatar'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from '@/app/lib/auth'
+import { copyTextFromInput, copyTextToClipboard } from '@/app/lib/copy-to-clipboard'
 import { resolveProfileAvatar, resolveProfileEmail, resolveProfileName } from '@/app/lib/profile-display'
+import { referralSignupUrl } from '@/app/lib/referral'
 import { profileInitials } from '@/app/lib/user-display'
 
 export default function ProfilePage() {
   const { user, loading, profile, profileLoading, refreshProfile, patchProfile } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const referralInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadOk, setUploadOk] = useState(false)
+  const [copyMessage, setCopyMessage] = useState<string | null>(null)
 
   const email = resolveProfileEmail(profile, user)
   const username = resolveProfileName(profile, user)
   const avatarUrl = resolveProfileAvatar(profile, user)
   const initials = profileInitials(username, email)
   const busy = loading || (profileLoading && !profile)
+  const referralCode = profile?.referralCode ?? null
+
+  async function copyReferralCode() {
+    if (!referralCode) return
+
+    setCopyMessage(null)
+    const copiedFromInput = await copyTextFromInput(referralInputRef.current)
+    const copied = copiedFromInput || (await copyTextToClipboard(referralCode))
+    setCopyMessage(copied ? 'Referral code copied.' : 'Could not copy referral code.')
+  }
+
+  async function copyReferralLink() {
+    if (!referralCode) return
+
+    setCopyMessage(null)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
+    const referralLink = referralSignupUrl(referralCode, appUrl)
+    const copied = await copyTextToClipboard(referralLink)
+    setCopyMessage(copied ? 'Referral link copied.' : 'Could not copy referral link.')
+  }
 
   async function onFileSelected(file: File | undefined) {
     if (!file) return
@@ -115,7 +139,52 @@ export default function ProfilePage() {
                   <dt className="font-medium text-stone-500 dark:text-stone-400">Email</dt>
                   <dd className="mt-1 text-stone-900 dark:text-stone-100">{email || '—'}</dd>
                 </div>
+                {profile?.referredByEmail && profile.referredByEmail !== email ? (
+                  <div>
+                    <dt className="font-medium text-stone-500 dark:text-stone-400">Referred by</dt>
+                    <dd className="mt-1 text-stone-900 dark:text-stone-100">{profile.referredByEmail}</dd>
+                  </div>
+                ) : null}
               </dl>
+
+              {referralCode ? (
+                <div className="mt-8 space-y-3 border-t border-stone-200 pt-6 dark:border-stone-800">
+                  <div>
+                    <h2 className="text-sm font-medium text-stone-900 dark:text-stone-100">Refer a friend</h2>
+                    <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+                      Share your link or code. New signups will share your email on their profile.
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="referralCodeDisplay"
+                      className="block text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400"
+                    >
+                      Your referral code
+                    </label>
+                    <input
+                      ref={referralInputRef}
+                      id="referralCodeDisplay"
+                      readOnly
+                      value={referralCode}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onClick={(e) => e.currentTarget.select()}
+                      className="mt-1.5 w-full max-w-[12rem] rounded-xl border border-stone-300 bg-stone-50 px-4 py-2.5 text-center font-mono text-lg uppercase tracking-[0.35em] text-stone-900 dark:border-stone-600 dark:bg-stone-950 dark:text-stone-100"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="button" color="amber" onClick={() => void copyReferralCode()}>
+                      Copy referral code
+                    </Button>
+                    <Button type="button" outline onClick={() => void copyReferralLink()}>
+                      Copy signup link
+                    </Button>
+                  </div>
+                  {copyMessage ? (
+                    <p className="text-sm text-emerald-700 dark:text-emerald-300">{copyMessage}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           )}
         </div>

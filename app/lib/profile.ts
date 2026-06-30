@@ -5,6 +5,8 @@ export type UserProfile = {
   username: string | null
   avatarUrl: string | null
   lastAuthProvider: string | null
+  referralCode: string | null
+  referredByEmail: string | null
 }
 
 export async function fetchUserProfile(signal?: AbortSignal): Promise<UserProfile> {
