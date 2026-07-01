@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { Provider } from '@supabase/supabase-js'
 import { AzureLoginButton } from '@/app/components/azure-login-button'
@@ -41,6 +41,11 @@ function persistReferralCookie(code: string) {
   document.cookie = `${REFERRAL_COOKIE}=${encodeURIComponent(trimmed)}; path=/; max-age=604800; samesite=lax`
 }
 
+function redirectAfterAuth(nextPath: string) {
+  const path = nextPath.startsWith('/') ? nextPath : '/dashboard'
+  window.location.assign(path)
+}
+
 const OAUTH_PROVIDER_LABEL: Record<'azure' | 'discord' | 'github' | 'google', string> = {
   azure: 'Azure',
   discord: 'Discord',
@@ -53,7 +58,6 @@ type AuthFormProps = {
 }
 
 export function AuthForm({ mode }: AuthFormProps) {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const nextPath = searchParams.get('next') ?? '/dashboard'
   const queryError = decodeQueryError(searchParams.get('error'))
@@ -190,8 +194,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           if (trimmedReferralCode) {
             await applyReferralAfterSignup(trimmedReferralCode)
           }
-          router.replace(nextPath.startsWith('/') ? nextPath : '/dashboard')
-          router.refresh()
+          redirectAfterAuth(nextPath)
           return
         }
 
@@ -209,8 +212,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         return
       }
 
-      router.replace(nextPath.startsWith('/') ? nextPath : '/dashboard')
-      router.refresh()
+      redirectAfterAuth(nextPath)
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

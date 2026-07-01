@@ -8,6 +8,12 @@ function matchesPrefix(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
+function copyCookies(from: NextResponse, to: NextResponse) {
+  for (const cookie of from.cookies.getAll()) {
+    to.cookies.set(cookie.name, cookie.value)
+  }
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -47,14 +53,18 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/login'
     redirectUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(redirectUrl)
+    const redirectResponse = NextResponse.redirect(redirectUrl)
+    copyCookies(supabaseResponse, redirectResponse)
+    return redirectResponse
   }
 
   if (user && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/dashboard'
     redirectUrl.search = ''
-    return NextResponse.redirect(redirectUrl)
+    const redirectResponse = NextResponse.redirect(redirectUrl)
+    copyCookies(supabaseResponse, redirectResponse)
+    return redirectResponse
   }
 
   return supabaseResponse

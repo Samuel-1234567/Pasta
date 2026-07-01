@@ -1,7 +1,7 @@
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { type NextRequest, NextResponse } from 'next/server'
-import { completeAuthRedirect, safeRedirectPath } from '@/app/lib/auth-callback'
+import { finalizeAuthResponse, runPostAuthTasks, safeRedirectPath } from '@/app/lib/auth-callback'
 import { parseOAuthProvider } from '@/app/lib/oauth-profile'
 import { REFERRAL_COOKIE } from '@/app/lib/referral'
 import { createSupabaseRouteHandlerClient } from '@/app/lib/supabase/route-handler'
@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
     return authErrorRedirect(origin, oauthError)
   }
 
-  const { supabase, applyCookies } = createSupabaseRouteHandlerClient(request)
+  const response = NextResponse.redirect(`${origin}${next}`)
+  const { supabase } = createSupabaseRouteHandlerClient(request, response)
+  const authOptions = { activeProvider, referralCode }
 
   if (tokenHash && type && OTP_TYPES.has(type as EmailOtpType)) {
     const { data, error } = await supabase.auth.verifyOtp({
@@ -45,9 +47,8 @@ export async function GET(request: NextRequest) {
     })
 
     if (!error && data.user) {
-      let response = NextResponse.redirect(`${origin}${next}`)
-      response = applyCookies(response)
-      return completeAuthRedirect(data.user, response, { activeProvider, referralCode })
+      runPostAuthTasks(data.user, authOptions)
+      return finalizeAuthResponse(response, { activeProvider })
     }
 
     console.error('[auth/callback] verifyOtp failed:', error?.message)
@@ -58,9 +59,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      let response = NextResponse.redirect(`${origin}${next}`)
-      response = applyCookies(response)
-      return completeAuthRedirect(data.user, response, { activeProvider, referralCode })
+      runPostAuthTasks(data.user, authOptions)
+      return finalizeAuthResponse(response, { activeProvider })
     }
 
     console.error('[auth/callback] exchangeCodeForSession failed:', error?.message)

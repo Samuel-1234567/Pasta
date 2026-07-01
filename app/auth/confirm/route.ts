@@ -1,7 +1,7 @@
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { type NextRequest, NextResponse } from 'next/server'
-import { completeAuthRedirect, safeRedirectPath } from '@/app/lib/auth-callback'
+import { finalizeAuthResponse, runPostAuthTasks, safeRedirectPath } from '@/app/lib/auth-callback'
 import { REFERRAL_COOKIE } from '@/app/lib/referral'
 import { createSupabaseRouteHandlerClient } from '@/app/lib/supabase/route-handler'
 
@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     return authErrorRedirect(origin, 'Invalid or expired confirmation link.')
   }
 
-  const { supabase, applyCookies } = createSupabaseRouteHandlerClient(request)
+  const response = NextResponse.redirect(`${origin}${next}`)
+  const { supabase } = createSupabaseRouteHandlerClient(request, response)
   const { data, error } = await supabase.auth.verifyOtp({
     token_hash: tokenHash,
     type: type as EmailOtpType,
@@ -41,7 +42,6 @@ export async function GET(request: NextRequest) {
     return authErrorRedirect(origin, error?.message ?? 'Could not confirm your email. Please try again.')
   }
 
-  let response = NextResponse.redirect(`${origin}${next}`)
-  response = applyCookies(response)
-  return completeAuthRedirect(data.user, response, { referralCode })
+  runPostAuthTasks(data.user, { referralCode })
+  return finalizeAuthResponse(response, {})
 }

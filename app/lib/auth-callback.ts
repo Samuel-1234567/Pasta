@@ -14,37 +14,12 @@ export function safeRedirectPath(next: string | null): string {
   return next
 }
 
-export async function completeAuthRedirect(
-  user: User,
+export function finalizeAuthResponse(
   response: NextResponse,
   options: {
     activeProvider?: string | null
-    referralCode?: string | null
   } = {},
-): Promise<NextResponse> {
-  try {
-    await ensureUserProfile(user.id, user.email)
-    const activeProvider = parseOAuthProvider(options.activeProvider)
-    await syncOAuthProfileToDatabase(user, { activeProvider })
-  } catch (error) {
-    console.error(
-      '[auth] profile sync failed:',
-      error instanceof Error ? error.message : error,
-    )
-  }
-
-  const referralCode = options.referralCode?.trim()
-  if (referralCode) {
-    try {
-      await applyReferralCode(user.id, user.email, normalizeReferralCode(referralCode))
-    } catch (error) {
-      console.error(
-        '[auth] referral apply failed:',
-        error instanceof Error ? error.message : error,
-      )
-    }
-  }
-
+): NextResponse {
   response.cookies.set('oauth_provider', '', { path: '/', maxAge: 0 })
   response.cookies.set(REFERRAL_COOKIE, '', { path: '/', maxAge: 0 })
 
@@ -58,4 +33,37 @@ export async function completeAuthRedirect(
   }
 
   return response
+}
+
+export function runPostAuthTasks(
+  user: User,
+  options: {
+    activeProvider?: string | null
+    referralCode?: string | null
+  } = {},
+): void {
+  void (async () => {
+    try {
+      await ensureUserProfile(user.id, user.email)
+      const activeProvider = parseOAuthProvider(options.activeProvider)
+      await syncOAuthProfileToDatabase(user, { activeProvider })
+    } catch (error) {
+      console.error(
+        '[auth] profile sync failed:',
+        error instanceof Error ? error.message : error,
+      )
+    }
+
+    const referralCode = options.referralCode?.trim()
+    if (referralCode) {
+      try {
+        await applyReferralCode(user.id, user.email, normalizeReferralCode(referralCode))
+      } catch (error) {
+        console.error(
+          '[auth] referral apply failed:',
+          error instanceof Error ? error.message : error,
+        )
+      }
+    }
+  })()
 }
